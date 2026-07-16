@@ -12,6 +12,7 @@ describe('pet drag helpers', () => {
   })
 
   it('clamps the dragged pet to every viewport edge', () => {
+    expect(clampPetPosition({ x: 145, y: 72 }, viewport, pet)).toEqual({ x: 145, y: 72 })
     expect(clampPetPosition({ x: -5, y: -2 }, viewport, pet)).toEqual({ x: 0, y: 0 })
     expect(clampPetPosition({ x: 280, y: 160 }, viewport, pet)).toEqual({ x: 220, y: 110 })
   })

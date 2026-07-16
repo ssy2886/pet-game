@@ -2,8 +2,13 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { getSpecies } from '../core/data/species'
 import type { Pet, EvolutionStage, Rarity } from '../core/types'
 import { RARITY_COLORS, ELEMENT_LABELS } from '../core/types'
+import { clampPetPosition, isDragGesture, restorePetPosition, type Point } from './petDrag'
 
 type PetState = 'idle' | 'walking' | 'sleeping' | 'interacting' | 'following'
+
+const DEFAULT_POSITION = { x: 200, y: 200 }
+const PET_STORAGE_KEY = 'desktop-pet-position.json'
+const PET_BASE_SIZE = { width: 85, height: 85 }
 
 // 初始化默认宠物数据
 const DEFAULT_PET: Pet = {
@@ -30,8 +35,10 @@ const DEFAULT_PET: Pet = {
 export default function DesktopPet() {
   const [pet] = useState<Pet>(DEFAULT_PET)
   const [state, setState] = useState<PetState>('idle')
-  const [pos, setPos] = useState({ x: 200, y: 200 })
-  const [targetPos, setTargetPos] = useState({ x: 200, y: 200 })
+  const [pos, setPos] = useState(DEFAULT_POSITION)
+  const [targetPos, setTargetPos] = useState(DEFAULT_POSITION)
+  const [isDragging, setIsDragging] = useState(false)
+  const [hasManualPosition, setHasManualPosition] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
   const [menuPos, setMenuPos] = useState({ x: 0, y: 0 })
@@ -39,8 +46,52 @@ export default function DesktopPet() {
   const animRef = useRef<number>(0)
   const frameRef = useRef(0)
   const prevTime = useRef(Date.now())
+  const dragRef = useRef<{ start: Point; offset: Point; active: boolean } | null>(null)
+  const suppressClickRef = useRef(false)
+  const positionLoadedRef = useRef(false)
 
   const rarityColor = RARITY_COLORS[pet.rarity]
+
+  const clampToViewport = useCallback((position: Point) => (
+    clampPetPosition(position, { width: window.innerWidth, height: window.innerHeight }, PET_BASE_SIZE)
+  ), [])
+
+  useEffect(() => {
+    if (positionLoadedRef.current) return
+    positionLoadedRef.current = true
+
+    let cancelled = false
+    const loadPosition = async () => {
+      try {
+        const saved = await (window as any).electronAPI?.storageRead?.(PET_STORAGE_KEY, DEFAULT_POSITION)
+        if (cancelled) return
+
+        const restored = restorePetPosition(
+          saved,
+          DEFAULT_POSITION,
+          { width: window.innerWidth, height: window.innerHeight },
+          PET_BASE_SIZE,
+        )
+        setPos(restored)
+        setTargetPos(restored)
+      } catch {
+        // The browser preview and storage failures both keep the default position.
+      }
+    }
+
+    void loadPosition()
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    const handleResize = () => {
+      setPos(clampToViewport)
+      setTargetPos(clampToViewport)
+    }
+
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [clampToViewport])
 
   // 平滑移动到目标位置
   useEffect(() => {
@@ -72,7 +123,7 @@ export default function DesktopPet() {
 
   // 随机散步 AI
   useEffect(() => {
-    if (state !== 'idle' && state !== 'walking') return
+    if (isDragging || hasManualPosition || (state !== 'idle' && state !== 'walking')) return
 
     const walkInterval = setInterval(() => {
       if (Math.random() < 0.6) {
@@ -91,7 +142,7 @@ export default function DesktopPet() {
     }, 3000 + Math.random() * 2000)
 
     return () => clearInterval(walkInterval)
-  }, [state])
+  }, [state, isDragging, hasManualPosition])
 
   // 点击宠物
   const handlePetClick = useCallback(() => {
@@ -104,9 +155,82 @@ export default function DesktopPet() {
     }, 1500)
   }, [])
 
+  const handlePointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (!event.isPrimary || event.button !== 0) return
+
+    dragRef.current = {
+      start: { x: event.clientX, y: event.clientY },
+      offset: { x: event.clientX - pos.x, y: event.clientY - pos.y },
+      active: false,
+    }
+    event.currentTarget.setPointerCapture(event.pointerId)
+    ;(window as any).electronAPI?.ignoreMouse(false)
+  }, [pos])
+
+  const handlePointerMove = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current
+    if (!drag || !event.isPrimary) return
+
+    if (!drag.active && !isDragGesture(drag.start, { x: event.clientX, y: event.clientY })) return
+
+    if (!drag.active) {
+      drag.active = true
+      setIsDragging(true)
+      setState('idle')
+    }
+
+    const nextPosition = clampToViewport({
+      x: event.clientX - drag.offset.x,
+      y: event.clientY - drag.offset.y,
+    })
+    setPos(nextPosition)
+    setTargetPos(nextPosition)
+  }, [clampToViewport])
+
+  const finishPointerDrag = useCallback((event: React.PointerEvent<HTMLDivElement>, petOnClick: boolean) => {
+    const drag = dragRef.current
+    if (!drag || !event.isPrimary) return
+
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+    dragRef.current = null
+
+    if (drag.active) {
+      const finalPosition = clampToViewport({
+        x: event.clientX - drag.offset.x,
+        y: event.clientY - drag.offset.y,
+      })
+      setPos(finalPosition)
+      setTargetPos(finalPosition)
+      setIsDragging(false)
+      setHasManualPosition(true)
+      suppressClickRef.current = true
+      const writePosition = (window as any).electronAPI?.storageWrite
+      if (writePosition) {
+        void Promise.resolve(writePosition(PET_STORAGE_KEY, finalPosition)).catch(() => undefined)
+      }
+      return
+    }
+
+    if (petOnClick) {
+      suppressClickRef.current = true
+      handlePetClick()
+    }
+  }, [clampToViewport, handlePetClick])
+
+  const handlePointerUp = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    finishPointerDrag(event, true)
+  }, [finishPointerDrag])
+
+  const handlePointerCancel = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    finishPointerDrag(event, false)
+  }, [finishPointerDrag])
+
   // 右键菜单
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
+    if (dragRef.current?.active) return
     setMenuPos({ x: e.clientX, y: e.clientY })
     setShowMenu(true)
   }, [])
@@ -188,9 +312,23 @@ export default function DesktopPet() {
         }}
         onMouseLeave={() => {
           setIsHovered(false);
-          (window as any).electronAPI?.ignoreMouse(true)
+          if (!dragRef.current?.active) {
+            (window as any).electronAPI?.ignoreMouse(true)
+          }
         }}
-        onClick={(e) => { e.stopPropagation(); handlePetClick() }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
+        onClick={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          if (suppressClickRef.current) {
+            suppressClickRef.current = false
+            return
+          }
+          handlePetClick()
+        }}
         onContextMenu={(e) => { e.stopPropagation(); handleContextMenu(e) }}
         style={{
           position: 'absolute',
@@ -200,7 +338,7 @@ export default function DesktopPet() {
           height: petSize,
           transform: `scale(${state === 'walking' ? 1.05 : scale}) scaleX(${state === 'following' && targetPos.x < pos.x ? -1 : 1})`,
           transition: 'transform 0.3s ease',
-          cursor: 'pointer',
+          cursor: isDragging ? 'grabbing' : 'pointer',
           zIndex: 10,
         }}
       >

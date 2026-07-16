@@ -108,31 +108,30 @@ export default function DesktopPet() {
 
   // 平滑移动到目标位置
   useEffect(() => {
-    if (state === 'following' || state === 'walking') {
-      const dx = targetPos.x - pos.x
-      const dy = targetPos.y - pos.y
-      const dist = Math.sqrt(dx * dx + dy * dy)
+    if (state !== 'following' && state !== 'walking') return
 
-      if (dist > 5) {
+    const timer = setInterval(() => {
+      setPos(prev => {
+        const boundedTarget = clampToViewport(targetPos)
+        const dx = boundedTarget.x - prev.x
+        const dy = boundedTarget.y - prev.y
+        const dist = Math.sqrt(dx * dx + dy * dy)
+
+        if (dist <= 5) {
+          clearInterval(timer)
+          setState('idle')
+          return boundedTarget
+        }
+
         const speed = 3
-        const vx = (dx / dist) * speed
-        const vy = (dy / dist) * speed
-        const timer = setInterval(() => {
-          setPos(prev => {
-            const nx = prev.x + vx
-            const ny = prev.y + vy
-            if (Math.abs(targetPos.x - nx) < 5 && Math.abs(targetPos.y - ny) < 5) {
-              clearInterval(timer)
-              setState('idle')
-              return { x: targetPos.x, y: targetPos.y }
-            }
-            return { x: nx, y: ny }
-          })
-        }, 16)
-        return () => clearInterval(timer)
-      }
-    }
-  }, [targetPos, state])
+        return clampToViewport({
+          x: prev.x + (dx / dist) * speed,
+          y: prev.y + (dy / dist) * speed,
+        })
+      })
+    }, 16)
+    return () => clearInterval(timer)
+  }, [targetPos, state, clampToViewport])
 
   // 随机散步 AI
   useEffect(() => {
@@ -204,16 +203,14 @@ export default function DesktopPet() {
     const drag = dragRef.current
     if (!drag || !event.isPrimary) return
 
-    const wasPointerOverPet = isPointerOverPetRef.current
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId)
     }
     dragRef.current = null
-    isPointerOverPetRef.current = event.currentTarget.matches(':hover')
+    const isPointerOverPet = event.currentTarget.matches(':hover')
+    isPointerOverPetRef.current = isPointerOverPet
 
-    if (!wasPointerOverPet || !isPointerOverPetRef.current) {
-      ;(window as any).electronAPI?.ignoreMouse(true)
-    }
+    ;(window as any).electronAPI?.ignoreMouse(!isPointerOverPet)
 
     if (drag.active) {
       const finalPosition = clampToViewport({

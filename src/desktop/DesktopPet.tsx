@@ -99,8 +99,6 @@ export default function DesktopPet() {
   }, [])
 
   useEffect(() => () => {
-    if (!dragRef.current) return
-
     dragRef.current = null
     ;(window as any).electronAPI?.ignoreMouse(true)
   }, [])

@@ -75,7 +75,7 @@ export default function DesktopPet() {
     let cancelled = false
     const loadPosition = async () => {
       try {
-        const saved = await (window as any).electronAPI?.storageRead?.(PET_STORAGE_KEY, DEFAULT_POSITION)
+        const saved = await (window as any).electronAPI?.storageRead?.(PET_STORAGE_KEY)
         if (cancelled) return
 
         const restored = restorePetPosition(
@@ -86,6 +86,7 @@ export default function DesktopPet() {
         )
         setPos(restored)
         setTargetPos(restored)
+        setHasManualPosition(isStoredPosition(saved))
       } catch {
         // The browser preview and storage failures both keep the default position.
       }
@@ -440,6 +441,15 @@ export default function DesktopPet() {
       )}
     </div>
   )
+}
+
+function isStoredPosition(value: unknown): value is Point {
+  if (value === null || typeof value !== 'object' || !('x' in value) || !('y' in value)) {
+    return false
+  }
+
+  const { x, y } = value
+  return typeof x === 'number' && typeof y === 'number' && Number.isFinite(x) && Number.isFinite(y)
 }
 
 function MenuItem({ icon, label, onClick }: { icon: string; label: string; onClick: () => void }) {

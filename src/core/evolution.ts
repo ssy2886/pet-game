@@ -26,11 +26,6 @@ export function checkEvolution(pet: Pet): EvolutionResult {
   const nextStage = STAGE_ORDER[currentIndex + 1];
   const req = EVOLUTION_REQUIREMENTS[nextStage];
 
-  // 终极体需要额外条件，不在此检查
-  if (nextStage === 'superUltimate') {
-    return { canEvolve: false, nextStage: null, reason: '终极体需要完成特殊挑战' };
-  }
-
   if (pet.level < req.level) {
     return { canEvolve: false, nextStage, reason: `需要等级 ${req.level}，当前 ${pet.level}` };
   }

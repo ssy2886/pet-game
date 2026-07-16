@@ -316,7 +316,7 @@ export function generateAutoSpecies(count: number): PetSpecies[] {
 // ==================== 导出所有物种 ====================
 
 /** 所有物种的完整列表（手动 + 自动生成） */
-export const ALL_SPECIES: PetSpecies[] = [
+const LEGACY_SPECIES: PetSpecies[] = [
   ...CORE_SPECIES,
   ...generateAutoSpecies(180), // 补充到约 200 种
   {
@@ -362,6 +362,11 @@ export const ALL_SPECIES: PetSpecies[] = [
 ];
 
 /** 按 ID 查找物种 */
+const SUPPORTED_SPECIES_ID_SET = new Set(['flame_drake', 'mirage_spirit', 'judgment_beast'])
+
+/** Currently playable species are limited to completed PNG body families. */
+export const ALL_SPECIES: PetSpecies[] = LEGACY_SPECIES.filter(species => SUPPORTED_SPECIES_ID_SET.has(species.id))
+
 export function getSpecies(id: string): PetSpecies | undefined {
   return ALL_SPECIES.find(s => s.id === id);
 }

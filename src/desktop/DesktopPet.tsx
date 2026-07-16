@@ -181,6 +181,7 @@ export default function DesktopPet() {
   const handlePointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     if (!event.isPrimary || event.button !== 0) return
 
+    userPlacementVersionRef.current++
     dragRef.current = {
       start: { x: event.clientX, y: event.clientY },
       offset: { x: event.clientX - pos.x, y: event.clientY - pos.y },
@@ -198,7 +199,6 @@ export default function DesktopPet() {
 
     if (!drag.active) {
       drag.active = true
-      userPlacementVersionRef.current++
       setIsDragging(true)
       setState('idle')
     }

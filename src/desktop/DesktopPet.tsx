@@ -50,6 +50,7 @@ export default function DesktopPet() {
   const suppressClickRef = useRef(false)
   const positionLoadedRef = useRef(false)
   const isPointerOverPetRef = useRef(false)
+  const userPlacementVersionRef = useRef(0)
 
   const rarityColor = RARITY_COLORS[pet.rarity]
   const petSize = state === 'interacting' ? 100 : state === 'sleeping' ? 70 : 85
@@ -74,9 +75,10 @@ export default function DesktopPet() {
 
     let cancelled = false
     const loadPosition = async () => {
+      const restoreVersion = userPlacementVersionRef.current
       try {
         const saved = await (window as any).electronAPI?.storageRead?.(PET_STORAGE_KEY)
-        if (cancelled) return
+        if (cancelled || userPlacementVersionRef.current !== restoreVersion) return
 
         const restored = restorePetPosition(
           saved,
@@ -94,6 +96,13 @@ export default function DesktopPet() {
 
     void loadPosition()
     return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => () => {
+    if (!dragRef.current) return
+
+    dragRef.current = null
+    ;(window as any).electronAPI?.ignoreMouse(true)
   }, [])
 
   useEffect(() => {
@@ -159,6 +168,7 @@ export default function DesktopPet() {
 
   // 点击宠物
   const handlePetClick = useCallback(() => {
+    userPlacementVersionRef.current++
     setIsHovered(true)
     setMessage('😊 摸摸~')
     setState('interacting')
@@ -188,6 +198,7 @@ export default function DesktopPet() {
 
     if (!drag.active) {
       drag.active = true
+      userPlacementVersionRef.current++
       setIsDragging(true)
       setState('idle')
     }

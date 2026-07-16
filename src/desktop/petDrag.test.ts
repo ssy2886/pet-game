@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clampPetPosition, isDragGesture, restorePetPosition } from './petDrag'
+import { clampPetPosition, getDraggedPetPosition, isDragGesture, restorePetPosition } from './petDrag'
 
 describe('pet drag helpers', () => {
   const viewport = { width: 300, height: 200 }
@@ -15,6 +15,10 @@ describe('pet drag helpers', () => {
     expect(clampPetPosition({ x: 145, y: 72 }, viewport, pet)).toEqual({ x: 145, y: 72 })
     expect(clampPetPosition({ x: -5, y: -2 }, viewport, pet)).toEqual({ x: 0, y: 0 })
     expect(clampPetPosition({ x: 280, y: 160 }, viewport, pet)).toEqual({ x: 220, y: 110 })
+  })
+
+  it('preserves the grabbed point while calculating a dragged position', () => {
+    expect(getDraggedPetPosition({ x: 165, y: 102 }, { x: 20, y: 30 }, viewport, pet)).toEqual({ x: 145, y: 72 })
   })
 
   it('restores valid coordinates and falls back for malformed data', () => {

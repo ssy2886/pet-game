@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { getSpecies } from '../core/data/species'
 import type { Pet, EvolutionStage, Rarity } from '../core/types'
 import { RARITY_COLORS, ELEMENT_LABELS } from '../core/types'
-import { clampPetPosition, isDragGesture, restorePetPosition, type Point } from './petDrag'
+import { clampPetPosition, getDraggedPetPosition, isDragGesture, restorePetPosition, type Point } from './petDrag'
 
 type PetState = 'idle' | 'walking' | 'sleeping' | 'interacting' | 'following'
 
@@ -51,6 +51,7 @@ export default function DesktopPet() {
   const positionLoadedRef = useRef(false)
   const isPointerOverPetRef = useRef(false)
   const userPlacementVersionRef = useRef(0)
+  const pendingRestoreRef = useRef<{ position: Point; hasManualPosition: boolean } | null>(null)
 
   const rarityColor = RARITY_COLORS[pet.rarity]
   const petSize = state === 'interacting' ? 100 : state === 'sleeping' ? 70 : 85
@@ -69,6 +70,25 @@ export default function DesktopPet() {
     return { x: clamped.x + overflow, y: clamped.y + overflow }
   }, [petSize, renderedScale])
 
+  const getDraggedPosition = useCallback((pointer: Point, offset: Point) => {
+    const renderedPetSize = petSize * renderedScale
+    const overflow = (renderedPetSize - petSize) / 2
+    const clamped = getDraggedPetPosition(
+      pointer,
+      { x: offset.x + overflow, y: offset.y + overflow },
+      { width: window.innerWidth, height: window.innerHeight },
+      { width: renderedPetSize, height: renderedPetSize },
+    )
+
+    return { x: clamped.x + overflow, y: clamped.y + overflow }
+  }, [petSize, renderedScale])
+
+  const applyRestoredPosition = useCallback((position: Point, hasManualPosition: boolean) => {
+    setPos(position)
+    setTargetPos(position)
+    setHasManualPosition(hasManualPosition)
+  }, [])
+
   useEffect(() => {
     if (positionLoadedRef.current) return
     positionLoadedRef.current = true
@@ -86,9 +106,13 @@ export default function DesktopPet() {
           { width: window.innerWidth, height: window.innerHeight },
           PET_BASE_SIZE,
         )
-        setPos(restored)
-        setTargetPos(restored)
-        setHasManualPosition(isStoredPosition(saved))
+        const pendingRestore = { position: restored, hasManualPosition: isStoredPosition(saved) }
+        if (dragRef.current?.active) return
+        if (dragRef.current) {
+          pendingRestoreRef.current = pendingRestore
+          return
+        }
+        applyRestoredPosition(pendingRestore.position, pendingRestore.hasManualPosition)
       } catch {
         // The browser preview and storage failures both keep the default position.
       }
@@ -96,10 +120,11 @@ export default function DesktopPet() {
 
     void loadPosition()
     return () => { cancelled = true }
-  }, [])
+  }, [applyRestoredPosition])
 
   useEffect(() => () => {
     dragRef.current = null
+    pendingRestoreRef.current = null
     ;(window as any).electronAPI?.ignoreMouse(true)
   }, [])
 
@@ -166,7 +191,6 @@ export default function DesktopPet() {
 
   // 点击宠物
   const handlePetClick = useCallback(() => {
-    userPlacementVersionRef.current++
     setIsHovered(true)
     setMessage('😊 摸摸~')
     setState('interacting')
@@ -179,7 +203,6 @@ export default function DesktopPet() {
   const handlePointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     if (!event.isPrimary || event.button !== 0) return
 
-    userPlacementVersionRef.current++
     dragRef.current = {
       start: { x: event.clientX, y: event.clientY },
       offset: { x: event.clientX - pos.x, y: event.clientY - pos.y },
@@ -197,17 +220,16 @@ export default function DesktopPet() {
 
     if (!drag.active) {
       drag.active = true
+      userPlacementVersionRef.current++
+      pendingRestoreRef.current = null
       setIsDragging(true)
       setState('idle')
     }
 
-    const nextPosition = clampToViewport({
-      x: event.clientX - drag.offset.x,
-      y: event.clientY - drag.offset.y,
-    })
+    const nextPosition = getDraggedPosition({ x: event.clientX, y: event.clientY }, drag.offset)
     setPos(nextPosition)
     setTargetPos(nextPosition)
-  }, [clampToViewport])
+  }, [getDraggedPosition])
 
   const finishPointerDrag = useCallback((event: React.PointerEvent<HTMLDivElement>, petOnClick: boolean) => {
     const drag = dragRef.current
@@ -223,10 +245,7 @@ export default function DesktopPet() {
     ;(window as any).electronAPI?.ignoreMouse(!isPointerOverPet)
 
     if (drag.active) {
-      const finalPosition = clampToViewport({
-        x: event.clientX - drag.offset.x,
-        y: event.clientY - drag.offset.y,
-      })
+      const finalPosition = getDraggedPosition({ x: event.clientX, y: event.clientY }, drag.offset)
       setPos(finalPosition)
       setTargetPos(finalPosition)
       setIsDragging(false)
@@ -239,11 +258,17 @@ export default function DesktopPet() {
       return
     }
 
+    const pendingRestore = pendingRestoreRef.current
+    pendingRestoreRef.current = null
+    if (petOnClick && pendingRestore) {
+      applyRestoredPosition(pendingRestore.position, pendingRestore.hasManualPosition)
+    }
+
     if (petOnClick) {
       suppressClickRef.current = true
       handlePetClick()
     }
-  }, [clampToViewport, handlePetClick])
+  }, [applyRestoredPosition, getDraggedPosition, handlePetClick])
 
   const handlePointerUp = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     finishPointerDrag(event, true)

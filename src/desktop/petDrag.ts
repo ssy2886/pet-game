@@ -17,6 +17,13 @@ export function clampPetPosition(position: Point, viewport: Size, pet: Size): Po
   }
 }
 
+export function getDraggedPetPosition(pointer: Point, offset: Point, viewport: Size, pet: Size): Point {
+  return clampPetPosition({
+    x: pointer.x - offset.x,
+    y: pointer.y - offset.y,
+  }, viewport, pet)
+}
+
 export function restorePetPosition(saved: unknown, fallback: Point, viewport: Size, pet: Size): Point {
   if (!isPoint(saved)) {
     return clampPetPosition(fallback, viewport, pet)

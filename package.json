@@ -1,0 +1,40 @@
+{
+  "name": "pet-game",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "concurrently \"vite --port 3000\" \"tsc -p tsconfig.electron.json && wait-on http://localhost:3000 && electron . --dev\"",
+    "dev:renderer": "vite --port 3000",
+    "dev:electron": "tsc -p tsconfig.electron.json && electron . --dev",
+    "build": "vite build && tsc -p tsconfig.electron.json",
+    "preview": "vite preview",
+    "start": "electron .",
+    "ts:check": "tsc -b",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "concurrently": "^10.0.3",
+    "electron": "^43.1.0",
+    "electron-store": "^11.0.2",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "react-router-dom": "^7.18.1",
+    "uuid": "^14.0.1",
+    "wait-on": "^9.0.10",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "@types/electron": "^1.4.38",
+    "@types/node": "^24.13.2",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@types/uuid": "^10.0.0",
+    "@vitejs/plugin-react": "^6.0.3",
+    "oxlint": "^1.71.0",
+    "typescript": "~6.0.2",
+    "vite": "^8.1.1",
+    "vitest": "^4.1.10"
+  }
+}

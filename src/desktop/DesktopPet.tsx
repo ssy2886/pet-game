@@ -49,12 +49,24 @@ export default function DesktopPet() {
   const dragRef = useRef<{ start: Point; offset: Point; active: boolean } | null>(null)
   const suppressClickRef = useRef(false)
   const positionLoadedRef = useRef(false)
+  const isPointerOverPetRef = useRef(false)
 
   const rarityColor = RARITY_COLORS[pet.rarity]
+  const petSize = state === 'interacting' ? 100 : state === 'sleeping' ? 70 : 85
+  const scale = state === 'sleeping' ? 0.8 : 1
+  const renderedScale = state === 'walking' ? 1.05 : scale
 
-  const clampToViewport = useCallback((position: Point) => (
-    clampPetPosition(position, { width: window.innerWidth, height: window.innerHeight }, PET_BASE_SIZE)
-  ), [])
+  const clampToViewport = useCallback((position: Point) => {
+    const renderedPetSize = petSize * renderedScale
+    const overflow = (renderedPetSize - petSize) / 2
+    const clamped = clampPetPosition(
+      { x: position.x - overflow, y: position.y - overflow },
+      { width: window.innerWidth, height: window.innerHeight },
+      { width: renderedPetSize, height: renderedPetSize },
+    )
+
+    return { x: clamped.x + overflow, y: clamped.y + overflow }
+  }, [petSize, renderedScale])
 
   useEffect(() => {
     if (positionLoadedRef.current) return
@@ -84,13 +96,14 @@ export default function DesktopPet() {
   }, [])
 
   useEffect(() => {
-    const handleResize = () => {
+    const clampPositions = () => {
       setPos(clampToViewport)
       setTargetPos(clampToViewport)
     }
 
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
+    clampPositions()
+    window.addEventListener('resize', clampPositions)
+    return () => window.removeEventListener('resize', clampPositions)
   }, [clampToViewport])
 
   // 平滑移动到目标位置
@@ -191,10 +204,16 @@ export default function DesktopPet() {
     const drag = dragRef.current
     if (!drag || !event.isPrimary) return
 
+    const wasPointerOverPet = isPointerOverPetRef.current
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId)
     }
     dragRef.current = null
+    isPointerOverPetRef.current = event.currentTarget.matches(':hover')
+
+    if (!wasPointerOverPet || !isPointerOverPetRef.current) {
+      ;(window as any).electronAPI?.ignoreMouse(true)
+    }
 
     if (drag.active) {
       const finalPosition = clampToViewport({
@@ -289,9 +308,6 @@ export default function DesktopPet() {
     return () => cancelAnimationFrame(animRef.current)
   }, [])
 
-  const petSize = state === 'interacting' ? 100 : state === 'sleeping' ? 70 : 85
-  const scale = state === 'sleeping' ? 0.8 : 1
-
   return (
     <div
       style={{
@@ -307,10 +323,12 @@ export default function DesktopPet() {
       <div
         className="pet-character"
         onMouseEnter={() => {
+          isPointerOverPetRef.current = true
           setIsHovered(true);
           (window as any).electronAPI?.ignoreMouse(false)
         }}
         onMouseLeave={() => {
+          isPointerOverPetRef.current = false
           setIsHovered(false);
           if (!dragRef.current?.active) {
             (window as any).electronAPI?.ignoreMouse(true)

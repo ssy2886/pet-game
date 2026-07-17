@@ -2,6 +2,8 @@ import { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, screen } from 'el
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { readJSON, writeJSON } from './storage.js';
+import { createGameStateService } from './gameStateService.js';
+import { shouldHideManagementWindow } from './windowLifecycle.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -9,11 +11,13 @@ const __dirname = path.dirname(__filename);
 let mainWindow: BrowserWindow | null = null;
 let petWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
+let isQuitting = false;
+let gameStateService: ReturnType<typeof createGameStateService> | null = null;
 
 const isDev = process.argv.includes('--dev');
 const VITE_DEV_URL = 'http://localhost:3000';
 
-function createMainWindow() {
+function createManagementWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -30,10 +34,25 @@ function createMainWindow() {
 
   if (isDev) {
     mainWindow.loadURL(`${VITE_DEV_URL}#/`);
-    mainWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'), { hash: '/' });
   }
+
+  mainWindow.on('close', (event) => {
+    if (shouldHideManagementWindow(isQuitting)) {
+      event.preventDefault();
+      mainWindow?.hide();
+    }
+  });
+}
+
+function showManagementWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createManagementWindow();
+    return;
+  }
+  mainWindow.show();
+  mainWindow.focus();
 }
 
 function createPetOverlay() {
@@ -89,7 +108,7 @@ function createTray() {
   tray = new Tray(icon);
 
   const contextMenu = Menu.buildFromTemplate([
-    { label: '📖 打开管理', click: () => mainWindow?.show() },
+    { label: '📖 打开管理', click: () => showManagementWindow() },
     { type: 'separator' },
     {
       label: '🎮 互动',
@@ -106,7 +125,7 @@ function createTray() {
 
   tray.setToolTip('🐾 数码世界');
   tray.setContextMenu(contextMenu);
-  tray.on('double-click', () => mainWindow?.show());
+  tray.on('double-click', () => showManagementWindow());
 }
 
 // ====== IPC Handlers ======
@@ -118,6 +137,21 @@ ipcMain.handle('storage:read', (_event, filename: string, defaultValue: any) => 
 
 ipcMain.handle('storage:write', (_event, filename: string, data: any) => {
   writeJSON(filename, data);
+  return true;
+});
+
+ipcMain.handle('game:read', () => gameStateService?.snapshot());
+
+ipcMain.handle('game:dispatch', (_event, action: any) => {
+  return gameStateService?.dispatch(action);
+});
+
+ipcMain.handle('game:replace', (_event, state: unknown) => {
+  return gameStateService?.replace(state);
+});
+
+ipcMain.handle('window:open-management', () => {
+  showManagementWindow();
   return true;
 });
 
@@ -140,13 +174,27 @@ ipcMain.on('pet:ignore-mouse', (_event, ignore: boolean) => {
 // ====== App Lifecycle ======
 
 app.whenReady().then(() => {
-  createMainWindow();
+  gameStateService = createGameStateService({
+    read: () => readJSON('game-state.json', undefined),
+    write: (state) => writeJSON('game-state.json', state),
+    publish: (state) => {
+      for (const window of [mainWindow, petWindow]) {
+        if (window && !window.isDestroyed()) {
+          window.webContents.send('game:state', state);
+        }
+      }
+    },
+  });
   createPetOverlay();
   createTray();
 
   app.on('activate', () => {
-    if (mainWindow) mainWindow.show();
+    showManagementWindow();
   });
+});
+
+app.on('before-quit', () => {
+  isQuitting = true;
 });
 
 app.on('window-all-closed', () => {

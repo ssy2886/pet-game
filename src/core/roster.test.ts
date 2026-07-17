@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { checkEvolution } from './evolution'
+import { rollRarity, rollSpecies } from './gacha'
 import { FIXED_BIRTH_RARITY, SUPPORTED_SPECIES_IDS, getRosterCategory, pickGoldSpecies } from './roster'
 
 describe('current pet roster', () => {
@@ -15,6 +16,11 @@ describe('current pet roster', () => {
     expect(pickGoldSpecies(() => 0)).toBe('flame_drake')
     expect(pickGoldSpecies(() => 0.5)).toBe('mirage_spirit')
     expect(pickGoldSpecies(() => 0.999)).toBe('judgment_beast')
+  })
+
+  it('creates only gold eggs from supported species', () => {
+    expect(rollRarity(0)).toBe('gold')
+    expect(SUPPORTED_SPECIES_IDS).toContain(rollSpecies('gold').id)
   })
 
   it('allows an ultimate pet to reach super ultimate at maximum requirements', () => {

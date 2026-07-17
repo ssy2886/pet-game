@@ -1,6 +1,7 @@
 import type { Rarity, PetSpecies } from './types';
 import { RARITY_ORDER } from './types';
 import { ALL_SPECIES } from './data/species';
+import { FIXED_BIRTH_RARITY } from './roster';
 
 /** 蛋池各稀有度概率 */
 const GACHA_RATES: Record<Rarity, number> = {
@@ -26,7 +27,11 @@ function getAvailableSpeciesForRarity(rarity: Rarity): PetSpecies[] {
 }
 
 /** 从稀有度分布中抽取一个品质 */
-export function rollRarity(pityCount: number): Rarity {
+export function rollRarity(_pityCount: number): Rarity {
+  void GACHA_RATES;
+  void PITY_THRESHOLD;
+  return FIXED_BIRTH_RARITY;
+/*
   // 保底：达到阈值必出金
   if (pityCount >= PITY_THRESHOLD - 1) return 'gold';
 
@@ -46,6 +51,7 @@ export function rollRarity(pityCount: number): Rarity {
   }
 
   return 'green'; // fallback
+*/
 }
 
 /** 从指定品质中随机选一个物种 */

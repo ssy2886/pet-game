@@ -7,6 +7,7 @@ import PetDisplay from '../components/pet/PetDisplay'
 export default function EggPage() {
   const eggs = useGameStore(s => s.eggs)
   const hatchEgg = useGameStore(s => s.hatchEgg)
+  const discardEgg = useGameStore(s => s.discardEgg)
   const [hatching, setHatching] = useState<string | null>(null)
   const [hatchedPet, setHatchedPet] = useState<Pet | null>(null)
 
@@ -22,6 +23,13 @@ export default function EggPage() {
       }
       setHatching(null)
     }, 2000)
+  }
+
+  const handleDiscard = (eggId: string) => {
+    if (hatching === eggId) return
+    if (window.confirm('确定要丢弃这枚宠物蛋吗？此操作不会返还资源。')) {
+      discardEgg(eggId)
+    }
   }
 
   return (
@@ -78,6 +86,14 @@ export default function EggPage() {
               disabled={hatching === egg.id}
             >
               {hatching === egg.id ? '⏳ 孵化中...' : '🐣 孵化'}
+            </button>
+            <button
+              className="btn btn-danger btn-sm"
+              style={{ width: '100%', marginTop: 6 }}
+              onClick={() => handleDiscard(egg.id)}
+              disabled={hatching === egg.id}
+            >
+              丢弃
             </button>
           </div>
         ))}

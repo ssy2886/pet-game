@@ -32,6 +32,8 @@ Electron main owns the authoritative serializable game state and persists it as 
 
 The management renderer initializes its store from the snapshot and sends mutations through IPC. The pet renderer reads the same snapshot and receives every state update. Main broadcasts each accepted update to every live renderer, including the sender, so both windows converge on the same data.
 
+Every existing management feature uses this same protocol: eggs and hatching, shop purchases, team and storage changes, pet sale, consumables, evolution, battle, expedition, and experience. No management-page action keeps a separate Electron-only Zustand mutation path. Browser-only development retains the existing local in-memory behavior.
+
 If Electron APIs are absent while rendering in a browser, the management app retains an in-memory fallback. The overlay handles absent or malformed state by showing a harmless empty-pet message instead of crashing.
 
 ## Desktop Pet Behavior

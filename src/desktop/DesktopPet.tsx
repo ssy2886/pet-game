@@ -33,7 +33,7 @@ const DEFAULT_PET: Pet = {
 }
 
 export default function DesktopPet() {
-  const [pet] = useState<Pet>(DEFAULT_PET)
+  const [pet, setPet] = useState<Pet | null>(null)
   const [state, setState] = useState<PetState>('idle')
   const [pos, setPos] = useState(DEFAULT_POSITION)
   const [targetPos, setTargetPos] = useState(DEFAULT_POSITION)
@@ -53,7 +53,19 @@ export default function DesktopPet() {
   const userPlacementVersionRef = useRef(0)
   const pendingRestoreRef = useRef<{ position: Point; hasManualPosition: boolean } | null>(null)
 
-  const rarityColor = RARITY_COLORS[pet.rarity]
+  useEffect(() => {
+    const api = (window as any).electronAPI
+    const selectActivePet = (snapshot: any): Pet | null => {
+      const teamId = Array.isArray(snapshot?.team) ? snapshot.team[0] : undefined
+      const pets = Array.isArray(snapshot?.pets) ? snapshot.pets : []
+      return pets.find((candidate: Pet) => candidate.id === teamId) || null
+    }
+
+    void Promise.resolve(api?.gameRead?.()).then((snapshot) => setPet(selectActivePet(snapshot))).catch(() => setPet(null))
+    return api?.onGameState?.((snapshot: unknown) => setPet(selectActivePet(snapshot)))
+  }, [])
+
+  const rarityColor = RARITY_COLORS[pet?.rarity ?? 'gold']
   const petSize = state === 'interacting' ? 100 : state === 'sleeping' ? 70 : 85
   const scale = state === 'sleeping' ? 0.8 : 1
   const renderedScale = state === 'walking' ? 1.05 : scale
@@ -191,6 +203,9 @@ export default function DesktopPet() {
 
   // 点击宠物
   const handlePetClick = useCallback(() => {
+    if (pet) {
+      void (window as any).electronAPI?.gameDispatch?.({ type: 'pet', petId: pet.id })
+    }
     setIsHovered(true)
     setMessage('😊 摸摸~')
     setState('interacting')
@@ -198,7 +213,7 @@ export default function DesktopPet() {
       setState('idle')
       setMessage('')
     }, 1500)
-  }, [])
+  }, [pet])
 
   const handlePointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     if (!event.isPrimary || event.button !== 0) return
@@ -292,6 +307,12 @@ export default function DesktopPet() {
   // 菜单操作
   const menuAction = useCallback((action: string) => {
     closeMenu()
+    if (pet) {
+      const gameAction = action === 'feed'
+        ? { type: 'feed', petId: pet.id, foodId: 'basic_feed' }
+        : { type: action, petId: pet.id }
+      void (window as any).electronAPI?.gameDispatch?.(gameAction)
+    }
     const messages: Record<string, string> = {
       feed: '🍖 吃饱了！',
       pet: '😊 好开心！',
@@ -304,7 +325,7 @@ export default function DesktopPet() {
       setState('idle')
       setMessage('')
     }, 2000)
-  }, [])
+  }, [pet])
 
   // 跟随鼠标 (在附近区域)
   useEffect(() => {
@@ -339,6 +360,8 @@ export default function DesktopPet() {
     animRef.current = requestAnimationFrame(breathe)
     return () => cancelAnimationFrame(animRef.current)
   }, [])
+
+  if (!pet) return null
 
   return (
     <div
@@ -469,7 +492,7 @@ export default function DesktopPet() {
           <MenuItem icon="🧼" label="洗澡" onClick={() => menuAction('wash')} />
           <MenuItem icon="🎾" label="玩耍" onClick={() => menuAction('play')} />
           <div style={{ height: 1, background: 'rgba(255,255,255,0.1)', margin: '4px 8px' }} />
-          <MenuItem icon="👥" label="宠物管理" onClick={() => window.open('', '_blank')} />
+          <MenuItem icon="👥" label="宠物管理" onClick={() => void (window as any).electronAPI?.openManagement?.()} />
           <MenuItem icon="🚪" label="退出" onClick={() => window.close()} />
         </div>
       )}

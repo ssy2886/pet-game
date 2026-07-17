@@ -7,6 +7,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   storageWrite: (filename: string, data: any) =>
     ipcRenderer.invoke('storage:write', filename, data),
 
+  gameRead: () => ipcRenderer.invoke('game:read'),
+  gameDispatch: (action: unknown) => ipcRenderer.invoke('game:dispatch', action),
+  gameReplace: (state: unknown) => ipcRenderer.invoke('game:replace', state),
+  onGameState: (callback: (state: unknown) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, state: unknown) => callback(state)
+    ipcRenderer.on('game:state', listener)
+    return () => ipcRenderer.removeListener('game:state', listener)
+  },
+  openManagement: () => ipcRenderer.invoke('window:open-management'),
+
   // 屏幕信息
   getScreenInfo: () => ipcRenderer.invoke('screen:info'),
 

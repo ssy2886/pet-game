@@ -41,6 +41,13 @@ function hashId(id: string): number {
 }
 
 function getBodyPlan(speciesId: string): number {
+  const fixedPlans: Record<string, number> = {
+    flame_drake: BODY_DRAGON,
+    mirage_spirit: BODY_SPIRIT,
+    judgment_beast: BODY_BEAST,
+  }
+  if (speciesId in fixedPlans) return fixedPlans[speciesId]
+
   const id = speciesId.toLowerCase()
   if (/\b(fox|狐)\b/i.test(id) || id.endsWith('fox') || id.includes('foxfire') || id.includes('aurora_fox')) return BODY_FOX
   if (/\b(phoenix|凰|bird|griffin|gryphon|狮鹫|雕|鹰|隼|thunder_bird)\b/i.test(id)) return BODY_BIRD

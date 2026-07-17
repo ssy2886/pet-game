@@ -10,6 +10,7 @@ import { rollRarity, rollSpecies, generateIVs } from '../core/gacha';
 import { evolvePet, checkEvolution } from '../core/evolution';
 import { createBattlePet, executeTurn, generateWildPet } from '../core/battle';
 import { generateMap, advanceNode, getReachableNodes } from '../core/exploration';
+import { toPersistedGameState, type PersistedGameState } from '../core/gameState';
 
 interface InventoryItem {
   id: string;
@@ -56,6 +57,7 @@ interface GameState {
   // 抽蛋
   pullEgg: () => Egg | null;
   hatchEgg: (eggId: string) => Pet | null;
+  discardEgg: (eggId: string) => void;
 
   // 宠物管理
   addPet: (pet: Pet) => void;
@@ -264,6 +266,8 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     return pet;
   },
+
+  discardEgg: (eggId) => set(s => ({ eggs: s.eggs.filter(egg => egg.id !== eggId) })),
 
   addPet: (pet) => set(s => ({ pets: [...s.pets, pet] })),
 
@@ -628,3 +632,35 @@ export const useGameStore = create<GameState>((set, get) => ({
     }));
   },
 }));
+
+let isApplyingElectronSnapshot = false
+
+function applyElectronSnapshot(snapshot: unknown) {
+  const next = toPersistedGameState(snapshot as Partial<PersistedGameState>)
+  isApplyingElectronSnapshot = true
+  useGameStore.setState(next)
+  isApplyingElectronSnapshot = false
+}
+
+function initializeElectronGameSync() {
+  if (typeof window === 'undefined') return
+  const api = (window as any).electronAPI
+  if (!api?.gameRead || !api?.gameReplace || !api?.onGameState) return
+
+  void Promise.resolve(api.gameRead()).then((snapshot: unknown) => {
+    if (snapshot && typeof snapshot === 'object' && Array.isArray((snapshot as any).pets)) {
+      applyElectronSnapshot(snapshot)
+    } else {
+      void api.gameReplace(toPersistedGameState(useGameStore.getState()))
+    }
+  }).catch(() => undefined)
+
+  api.onGameState((snapshot: unknown) => applyElectronSnapshot(snapshot))
+  useGameStore.subscribe((state) => {
+    if (!isApplyingElectronSnapshot) {
+      void api.gameReplace(toPersistedGameState(state))
+    }
+  })
+}
+
+initializeElectronGameSync()

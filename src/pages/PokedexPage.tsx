@@ -3,10 +3,11 @@ import { ALL_SPECIES } from '../core/data/species'
 import { ELEMENT_LABELS, STAGE_LABELS } from '../core/types'
 import PetDisplay from '../components/pet/PetDisplay'
 import { useState } from 'react'
+import { getRosterCategory } from '../core/roster'
 
 export default function PokedexPage() {
   const pokedex = useGameStore(s => s.pokedex)
-  const [filter, setFilter] = useState<'all' | 'owned' | 'seen' | 'unknown'>('all')
+  const [filter, setFilter] = useState<'all' | 'dragon' | 'spirit' | 'beast' | 'owned' | 'unknown'>('all')
 
   const entries = ALL_SPECIES.map(species => {
     const entry = pokedex[species.id]
@@ -17,8 +18,8 @@ export default function PokedexPage() {
   })
 
   const filtered = entries.filter(e => {
+    if (filter === 'dragon' || filter === 'spirit' || filter === 'beast') return getRosterCategory(e.species.id) === filter
     if (filter === 'owned') return e.status === 'owned'
-    if (filter === 'seen') return e.status === 'seen' || e.status === 'owned'
     if (filter === 'unknown') return e.status === 'unknown'
     return true
   })
@@ -36,13 +37,13 @@ export default function PokedexPage() {
       </div>
 
       <div style={{ display: 'flex', gap: 8 }}>
-        {(['all', 'owned', 'seen', 'unknown'] as const).map(f => (
+        {(['all', 'dragon', 'spirit', 'beast', 'owned', 'unknown'] as const).map(f => (
           <button
             key={f}
             className={`btn btn-sm ${filter === f ? 'btn-primary' : 'btn-ghost'}`}
             onClick={() => setFilter(f)}
           >
-            {f === 'all' ? '全部' : f === 'owned' ? '已捕获' : f === 'seen' ? '已遇见' : '未发现'}
+            {f === 'all' ? '全部' : f === 'dragon' ? '龙类' : f === 'spirit' ? '灵体' : f === 'beast' ? '兽类' : f === 'owned' ? '已拥有' : '未发现'}
           </button>
         ))}
       </div>

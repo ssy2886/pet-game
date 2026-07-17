@@ -3,7 +3,7 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { readJSON, writeJSON } from './storage.js';
 import { createGameStateService } from './gameStateService.js';
-import { shouldHideManagementWindow } from './windowLifecycle.js';
+import { getOverlayUrl, shouldHideManagementWindow } from './windowLifecycle.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -82,7 +82,7 @@ function createPetOverlay() {
   petWindow.setIgnoreMouseEvents(true, { forward: true });
 
   if (isDev) {
-    petWindow.loadURL(`${VITE_DEV_URL}pet-overlay.html`);
+    petWindow.loadURL(getOverlayUrl(VITE_DEV_URL));
   } else {
     petWindow.loadFile(path.join(__dirname, '../dist/pet-overlay.html'));
   }

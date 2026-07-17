@@ -651,14 +651,18 @@ function initializeElectronGameSync() {
     if (snapshot && typeof snapshot === 'object' && Array.isArray((snapshot as any).pets)) {
       applyElectronSnapshot(snapshot)
     } else {
-      void api.gameReplace(toPersistedGameState(useGameStore.getState()))
+      const initialSnapshot = toPersistedGameState(useGameStore.getState())
+      void api.gameReplace(initialSnapshot)
+      void api.storageWrite?.('game-state.json', initialSnapshot)
     }
   }).catch(() => undefined)
 
   api.onGameState((snapshot: unknown) => applyElectronSnapshot(snapshot))
   useGameStore.subscribe((state) => {
     if (!isApplyingElectronSnapshot) {
-      void api.gameReplace(toPersistedGameState(state))
+      const snapshot = toPersistedGameState(state)
+      void api.gameReplace(snapshot)
+      void api.storageWrite?.('game-state.json', snapshot)
     }
   })
 }
